@@ -30,6 +30,7 @@
 #include "core/ramlogger.h"
 #include "core/luaiso.h"
 #include "core/mdec.h"
+#include "core/movie.h"
 #include "core/pad.h"
 #include "core/patchmanager.h"
 #include "core/pcsxlua.h"
@@ -68,6 +69,7 @@ PCSX::Emulator::Emulator()
       m_lua(new PCSX::Lua()),
       m_mdec(new PCSX::MDEC()),
       m_mem(new PCSX::Memory()),
+      m_movie(new PCSX::MovieManager()),
       m_pads(PCSX::Pads::factory()),
       m_patchManager(new PatchManager()),
       m_pioCart(new PCSX::PIOCart),
@@ -132,6 +134,7 @@ void PCSX::Emulator::setLua() {
     L.pop();
 
     m_pads->setLua(L);
+    m_movie->setLua(L);
 
     assert(L.gettop() == 0);
 }

@@ -38,6 +38,7 @@ vsprojects/packages
 deps/
 objs/
 bins/
+compile_commands.json
 /pcsx-redux
 /authoring
 /exe2elf
@@ -72,6 +73,10 @@ PCSX-Redux.app
 *.sstate7
 *.sstate8
 *.sstate9
+
+# Rerecording
+movies/
+*.pcsxmv
 
 # GPU dump files
 *.dump

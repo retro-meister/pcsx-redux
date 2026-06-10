@@ -49,8 +49,9 @@ enum class FileDialogMode { Open, MultiSelect, Save };
 template <FileDialogMode mode = FileDialogMode::Open>
 class FileDialog : public FileDialogBase {
   public:
-    FileDialog(std::function<const char*()> title, std::vector<std::string>& favorites)
-        : FileDialogBase(favorites), m_title(title) {
+    FileDialog(std::function<const char*()> title, std::vector<std::string>& favorites,
+               const std::string& filter = "*.*")
+        : FileDialogBase(favorites), m_title(title), m_fileFilter(filter) {
         setToCurrentPath();
         setDeleteTexture();
     }
@@ -59,10 +60,10 @@ class FileDialog : public FileDialogBase {
     void openDialog() {
         restoreFavorites();
         if constexpr (mode == FileDialogMode::Open) {
-            Open(m_title(), m_title(), "*.*", mode == FileDialogMode::MultiSelect,
+            Open(m_title(), m_title(), m_fileFilter, mode == FileDialogMode::MultiSelect,
                  reinterpret_cast<const char*>(m_currentPath.u8string().c_str()));
         } else if constexpr (mode == FileDialogMode::Save) {
-            Save(m_title(), m_title(), "*.*", reinterpret_cast<const char*>(m_currentPath.u8string().c_str()));
+            Save(m_title(), m_title(), m_fileFilter, reinterpret_cast<const char*>(m_currentPath.u8string().c_str()));
         }
     }
     const std::vector<PCSX::u8string>& selected() const { return m_results; }
@@ -83,6 +84,7 @@ class FileDialog : public FileDialogBase {
 
   private:
     const std::function<const char*()> m_title;
+    const std::string m_fileFilter;
     std::vector<PCSX::u8string> m_results;
 };
 

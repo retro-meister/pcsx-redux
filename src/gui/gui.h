@@ -58,6 +58,7 @@
 #include "gui/widgets/msan_viewer.h"
 #include "gui/widgets/pio-cart.h"
 #include "gui/widgets/registers.h"
+#include "gui/widgets/rerecording.h"
 #include "gui/widgets/shader-editor.h"
 #include "gui/widgets/sio1.h"
 #include "gui/widgets/ram-viewer.h"
@@ -104,6 +105,7 @@ class GUI final : public UI {
     typedef Setting<bool, TYPESTRING("ShowMemoryObserver")> ShowMemoryObserver;
     typedef Setting<bool, TYPESTRING("ShowTypedDebugger")> ShowTypedDebugger;
     typedef Setting<bool, TYPESTRING("ShowPatches")> ShowPatches;
+    typedef Setting<bool, TYPESTRING("ShowRerecording")> ShowRerecording;
     typedef Setting<bool, TYPESTRING("ShowMemcardManager")> ShowMemcardManager;
     typedef Setting<bool, TYPESTRING("ShowRegisters")> ShowRegisters;
     typedef Setting<bool, TYPESTRING("ShowAssembly")> ShowAssembly;
@@ -163,7 +165,8 @@ class GUI final : public UI {
     Settings<Fullscreen, FullWindowRender, ShowMenu, ShowLog, WindowPosX, WindowPosY, WindowSizeX, WindowSizeY,
              WindowMaximized, IdleSwapInterval, ShowLuaConsole, ShowLuaInspector, ShowLuaEditor, ShowMainVRAMViewer,
              ShowCLUTVRAMViewer, ShowVRAMViewer1, ShowVRAMViewer2, ShowVRAMViewer3, ShowVRAMViewer4, ShowMemoryObserver,
-             ShowTypedDebugger, ShowPatches, ShowMemcardManager, ShowRegisters, ShowAssembly, ShowDisassembly,
+             ShowTypedDebugger, ShowPatches, ShowRerecording, ShowMemcardManager, ShowRegisters, ShowAssembly,
+             ShowDisassembly,
              ShowBreakpoints, ShowNamedSaveStates, ShowEvents, ShowHandlers, ShowKernelLog, ShowCallstacks, ShowSIO1,
              ShowIsoBrowser, ShowGPULogger, ShowRAMViewer, ShowHeapViewer, ShowHWRegs, MainFontSize, MonoFontSize, GUITheme,
              AllowMouseCaptureToggle,
@@ -396,6 +399,7 @@ class GUI final : public UI {
     Widgets::MemoryObserver m_memoryObserver = {settings.get<ShowMemoryObserver>().value};
     Widgets::TypedDebugger m_typedDebugger;
     Widgets::Patches m_patches = {settings.get<ShowPatches>().value};
+    Widgets::Rerecording m_rerecording;
     Widgets::MemcardManager m_memcardManager;
     Widgets::Registers m_registers = {settings.get<ShowRegisters>().value};
     Widgets::Assembly m_assembly;

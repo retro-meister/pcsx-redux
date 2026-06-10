@@ -79,6 +79,7 @@ class HW;
 class Lua;
 class MDEC;
 class Memory;
+class MovieManager;
 class Pads;
 class PatchManager;
 class R3000Acpu;
@@ -267,6 +268,7 @@ class Emulator {
     std::unique_ptr<Lua> m_lua;
     std::unique_ptr<MDEC> m_mdec;
     std::unique_ptr<Memory> m_mem;
+    std::unique_ptr<MovieManager> m_movie;
     std::unique_ptr<Pads> m_pads;
     std::unique_ptr<PatchManager> m_patchManager;
     std::unique_ptr<PIOCart> m_pioCart;

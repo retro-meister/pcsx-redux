@@ -30,6 +30,14 @@ namespace PCSX {
 
 class GUI;
 
+struct PadInputState {
+    uint16_t buttonStatus = 0xffff;
+    uint8_t leftJoyX = 0x80;
+    uint8_t leftJoyY = 0x80;
+    uint8_t rightJoyX = 0x80;
+    uint8_t rightJoyY = 0x80;
+};
+
 class Pads {
   public:
     enum class Port { Port1 = 0, Port2 };
@@ -51,6 +59,12 @@ class Pads {
     virtual void setLua(PCSX::Lua L) = 0;
 
     virtual bool isPadConnected(int pad) = 0;
+
+    virtual PadInputState getPortState(Port port) const = 0;
+    virtual void setPortInjection(Port port, const PadInputState& state) = 0;
+    virtual void setInjectionActive(bool active) = 0;
+    virtual void clearInjection() = 0;
+    virtual bool getInjectionActive() const = 0;
 
     bool m_showCfg = false;
 

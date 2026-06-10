@@ -135,7 +135,9 @@ void PCSX::Widgets::ZepEditor::draw(GUI* gui) {
             {ImGuiKey_F10, Zep::ExtKeys::F10}, {ImGuiKey_F11, Zep::ExtKeys::F11}, {ImGuiKey_F12, Zep::ExtKeys::F12},
         };
 
-        if (io.KeyCtrl) {
+        const bool modCtrl = io.KeyCtrl || io.KeySuper;
+
+        if (modCtrl) {
             mod |= Zep::ModifierKey::Ctrl;
         }
         if (io.KeyShift) {
@@ -193,7 +195,7 @@ void PCSX::Widgets::ZepEditor::draw(GUI* gui) {
         } else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
             buffer.GetMode()->AddKeyPress(Zep::ExtKeys::PAGEUP, mod);
             return;
-        } else if (io.KeyCtrl) {
+        } else if (modCtrl) {
             if (ImGui::IsKeyPressed(ImGuiKey_1)) {
                 m_editor->SetGlobalMode(Zep::ZepMode_Standard::StaticName());
                 handled = true;
@@ -201,7 +203,7 @@ void PCSX::Widgets::ZepEditor::draw(GUI* gui) {
                 m_editor->SetGlobalMode(Zep::ZepMode_Vim::StaticName());
                 handled = true;
             } else {
-                for (const auto ch : {ImGuiKey_A, ImGuiKey_Z}) {
+                for (const auto ch : {ImGuiKey_V, ImGuiKey_Z}) {
                     if (ImGui::IsKeyPressed(ch)) {
                         buffer.GetMode()->AddKeyPress(ch - ImGuiKey_A + 'a', mod);
                         handled = true;

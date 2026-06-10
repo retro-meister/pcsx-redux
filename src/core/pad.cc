@@ -67,7 +67,36 @@ class PadsImpl : public PCSX::Pads {
         }
     }
 
+    PCSX::PadInputState getPortState(Port port) const override {
+        int index = magic_enum::enum_integer(port);
+        const PadData& d = m_pads[index].m_data;
+        return {d.buttonStatus, d.leftJoyX, d.leftJoyY, d.rightJoyX, d.rightJoyY};
+    }
+
+    void setPortInjection(Port port, const PCSX::PadInputState& state) override {
+        int index = magic_enum::enum_integer(port);
+        PadData& d = m_pads[index].m_injected;
+        d.buttonStatus = state.buttonStatus;
+        d.leftJoyX = state.leftJoyX;
+        d.leftJoyY = state.leftJoyY;
+        d.rightJoyX = state.rightJoyX;
+        d.rightJoyY = state.rightJoyY;
+    }
+
+    void setInjectionActive(bool active) override { m_injectionActive = active; }
+    void clearInjection() override {
+        m_injectionActive = false;
+        for (auto& pad : m_pads) {
+            pad.m_injected.buttonStatus = 0xffff;
+            pad.m_injected.overrides = 0xffff;
+            pad.m_injected.leftJoyX = pad.m_injected.leftJoyY = pad.m_injected.rightJoyX = pad.m_injected.rightJoyY =
+                0x80;
+        }
+    }
+    bool getInjectionActive() const override { return m_injectionActive; }
+
   private:
+    bool m_injectionActive = false;
     PCSX::EventBus::Listener m_listener;
     // This is a list of all of the valid GLFW gamepad IDs that we have found querying GLFW.
     // A value of -1 means that there is no gamepad at that index.
@@ -182,6 +211,7 @@ class PadsImpl : public PCSX::Pads {
         int m_padMapping[16];
         PadType m_type;
         PadData m_data;
+        PadData m_injected;
 
         int m_padID = -1;
         int m_buttonToWait = -1;
@@ -567,6 +597,11 @@ bool PadsImpl::Pad::isControllerButtonPressed(int button, GLFWgamepadstate* stat
 static constexpr float π(float fraction = 1.0f) { return fraction * M_PI; }
 
 void PadsImpl::Pad::getButtons() {
+    if (s_pads->m_injectionActive) {
+        m_data = m_injected;
+        return;
+    }
+
     PadData& pad = m_data;
     if (!m_settings.get<SettingConnected>()) {
         pad.buttonStatus = 0xffff;

@@ -173,6 +173,7 @@ PCSX::GUI::GUI(std::vector<std::string>& favorites)
     : m_listener(g_system->m_eventBus),
       m_typedDebugger(settings.get<ShowTypedDebugger>().value, favorites),
       m_memcardManager(settings.get<ShowMemcardManager>().value, favorites),
+      m_rerecording(settings.get<ShowRerecording>().value, favorites),
       m_assembly(settings.get<ShowAssembly>().value, favorites),
       m_openIsoFileDialog(l_("Open Disk Image"), favorites),
       m_openBinaryDialog(l_("Open Binary"), favorites),
@@ -1396,6 +1397,7 @@ in Configuration->Emulation, restart PCSX-Redux, then try again.)"));
                     ImGui::MenuItem(_("Show MSAN Viewer"), nullptr, &m_msanViewer.m_show);
                     ImGui::MenuItem(_("Show Typed Debugger"), nullptr, &m_typedDebugger.m_show);
                     ImGui::MenuItem(_("Show Patches"), nullptr, &m_patches.m_show);
+                    ImGui::MenuItem(_("Show Rerecording"), nullptr, &m_rerecording.m_show);
                     ImGui::MenuItem(_("Show Interrupts Scaler"), nullptr, &m_showInterruptsScaler);
                     if (ImGui::BeginMenu(_("First Chance Exceptions"))) {
                         ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
@@ -1706,6 +1708,10 @@ in Configuration->Emulation, restart PCSX-Redux, then try again.)"));
 
     if (m_patches.m_show) {
         m_patches.draw(_("Patches"));
+    }
+
+    if (m_rerecording.m_show) {
+        m_rerecording.draw(_("Rerecording"));
     }
 
     if (m_namedSaveStates.m_show) {
