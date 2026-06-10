@@ -66,6 +66,14 @@ void pushEvent(PCSX::Lua L, const PCSX::Events::GUI::JumpToMemory& e) {
 }
 
 template <>
+void pushEvent(PCSX::Lua L, const PCSX::Events::Movie::Frame& e) {
+    L.newtable();
+    L.push("index");
+    L.push(lua_Number(e.index));
+    L.settable();
+}
+
+template <>
 void pushEvent(PCSX::Lua L, const PCSX::Events::Keyboard& e) {
     L.newtable();
     L.push("key");
@@ -205,6 +213,12 @@ void PCSX::LuaBindings::open_events(Lua L) {
                 createListener<Events::Keyboard>(L);
             } else if (name == "Memory::SetLuts") {
                 createListener<Events::Memory::SetLuts>(L);
+            } else if (name == "Movie::PlaybackStarted") {
+                createListener<Events::Movie::PlaybackStarted>(L);
+            } else if (name == "Movie::PlaybackFinished") {
+                createListener<Events::Movie::PlaybackFinished>(L);
+            } else if (name == "Movie::Frame") {
+                createListener<Events::Movie::Frame>(L);
             } else {
                 return L.error("createListener: unknown event name");
             }

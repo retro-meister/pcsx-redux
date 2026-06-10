@@ -123,6 +123,13 @@ struct Keyboard {
 namespace Memory {
 struct SetLuts {};
 }  // namespace Memory
+namespace Movie {
+struct PlaybackStarted {};
+struct PlaybackFinished {};
+struct Frame {
+    uint64_t index = 0;
+};
+}  // namespace Movie
 }  // namespace Events
 
 class System {

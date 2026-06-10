@@ -91,7 +91,9 @@ void MovieManager::onVsync() {
         m_frameIndex++;
         if (m_frameIndex < m_frames.size()) {
             applyFrame(m_frameIndex);
+            g_system->m_eventBus->signal(Events::Movie::Frame{m_frameIndex});
         } else {
+            g_system->m_eventBus->signal(Events::Movie::PlaybackFinished{});
             stop(true);
         }
     }
@@ -130,6 +132,8 @@ bool MovieManager::startPlaying() {
     m_frameIndex = 0;
     m_mode = Mode::Playing;
     applyFrame(0);
+    g_system->m_eventBus->signal(Events::Movie::PlaybackStarted{});
+    g_system->m_eventBus->signal(Events::Movie::Frame{0});
     g_system->resume();
     return true;
 }
