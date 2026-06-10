@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include "core/pad.h"
+
 #include "core/debug.h"
 #include "core/movie.h"
 #include "core/psxemulator.h"
@@ -58,18 +60,42 @@ bool debuggerEnabled() {
         .value;
 }
 
-nlohmann::json toolGetEmulationStatus() {
+nlohmann::json buildEmulationStatusJson() {
     auto& debugSettings = g_emulator->settings.get<PCSX::Emulator::SettingDebugSettings>();
+    auto* movie = g_emulator->m_movie.get();
     nlohmann::json j;
     j["running"] = g_system->running();
     j["pc"] = g_emulator->m_cpu->m_regs.pc;
     j["debugger"] = debugSettings.get<PCSX::Emulator::DebugSettings::Debug>().value;
     j["dynarec"] = g_emulator->m_cpu->isDynarec();
     j["ram8mb"] = g_emulator->settings.get<PCSX::Emulator::Setting8MB>().value;
-    return mcpTextResult(j);
+    j["pending_frame_advances"] = movie->getPendingFrameAdvances();
+    switch (movie->getMode()) {
+        case PCSX::MovieManager::Mode::Idle:
+            j["movie_mode"] = "idle";
+            break;
+        case PCSX::MovieManager::Mode::Recording:
+            j["movie_mode"] = "recording";
+            break;
+        case PCSX::MovieManager::Mode::Playing:
+            j["movie_mode"] = "playing";
+            break;
+    }
+    j["movie_frame"] = movie->getFrameIndex();
+    j["movie_frame_count"] = movie->getFrameCount();
+    if (!movie->getPath().empty()) {
+        j["movie_path"] = movie->getPath().string();
+    }
+    auto* cpu = g_emulator->m_cpu.get();
+    if (auto* sym = cpu->findContainingSymbol(cpu->m_regs.pc)) {
+        j["pc_symbol"] = sym->second;
+        j["pc_symbol_address"] = sym->first;
+        j["pc_symbol_offset"] = cpu->m_regs.pc - sym->first;
+    }
+    return j;
 }
 
-nlohmann::json toolGetRegisters() {
+nlohmann::json buildRegistersJson() {
     const auto& regs = g_emulator->m_cpu->m_regs;
     static const char* gprNames[] = {"zero", "at",  "v0",  "v1",  "a0",  "a1",  "a2",  "a3",  "t0",  "t1",  "t2",
                                      "t3",   "t4",  "t5",  "t6",  "t7",  "s0",  "s1",  "s2",  "s3",  "s4",  "s5",
@@ -83,8 +109,12 @@ nlohmann::json toolGetRegisters() {
         gpr[gprNames[i]] = regs.GPR.r[i];
     }
     j["gpr"] = gpr;
-    return mcpTextResult(j);
+    return j;
 }
+
+nlohmann::json toolGetEmulationStatus() { return mcpTextResult(buildEmulationStatusJson()); }
+
+nlohmann::json toolGetRegisters() { return mcpTextResult(buildRegistersJson()); }
 
 uint32_t parseAddress(const nlohmann::json& args, const char* key) {
     if (!args.contains(key)) {
@@ -103,12 +133,7 @@ uint32_t parseAddress(const nlohmann::json& args, const char* key) {
     throw std::runtime_error(fmt::format("invalid address argument '{}'", key));
 }
 
-nlohmann::json toolReadMemory(const nlohmann::json& args) {
-    uint32_t address = parseAddress(args, "address");
-    size_t size = 4;
-    if (args.contains("size")) {
-        size = args.at("size").get<size_t>();
-    }
+nlohmann::json buildMemoryJson(uint32_t address, size_t size) {
     if (size == 0 || size > kMaxMemoryIO) {
         throw std::runtime_error(fmt::format("size must be 1..{}", kMaxMemoryIO));
     }
@@ -127,10 +152,18 @@ nlohmann::json toolReadMemory(const nlohmann::json& args) {
     }
     j["hex"] = hex;
     if (size >= 4) {
-        uint32_t u32 = mem->read32(address);
-        j["u32"] = u32;
+        j["u32"] = mem->read32(address);
     }
-    return mcpTextResult(j);
+    return j;
+}
+
+nlohmann::json toolReadMemory(const nlohmann::json& args) {
+    uint32_t address = parseAddress(args, "address");
+    size_t size = 4;
+    if (args.contains("size")) {
+        size = args.at("size").get<size_t>();
+    }
+    return mcpTextResult(buildMemoryJson(address, size));
 }
 
 nlohmann::json toolWriteMemory(const nlohmann::json& args) {
@@ -266,6 +299,217 @@ nlohmann::json toolRemoveBreakpoint(const nlohmann::json& args) {
     return mcpTextResult(j);
 }
 
+nlohmann::json portInputToJson(const PCSX::PadInputState& port) {
+    static const char* buttonNames[] = {"SELECT", "START",  "UP",       "RIGHT",    "DOWN",      "LEFT",
+                                        "L2",     "R2",     "L1",       "R1",       "TRIANGLE",  "CIRCLE",
+                                        "CROSS",  "SQUARE"};
+    static const unsigned buttonBits[] = {0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    nlohmann::json j = nlohmann::json::object();
+    for (size_t i = 0; i < sizeof(buttonNames) / sizeof(buttonNames[0]); ++i) {
+        j[buttonNames[i]] = (port.buttonStatus & (1 << buttonBits[i])) == 0;
+    }
+    j["leftX"] = port.leftJoyX;
+    j["leftY"] = port.leftJoyY;
+    j["rightX"] = port.rightJoyX;
+    j["rightY"] = port.rightJoyY;
+    return j;
+}
+
+nlohmann::json buildMovieStatusJson() {
+    auto* movie = g_emulator->m_movie.get();
+    nlohmann::json j;
+    switch (movie->getMode()) {
+        case PCSX::MovieManager::Mode::Idle:
+            j["mode"] = "idle";
+            break;
+        case PCSX::MovieManager::Mode::Recording:
+            j["mode"] = "recording";
+            break;
+        case PCSX::MovieManager::Mode::Playing:
+            j["mode"] = "playing";
+            break;
+    }
+    j["frame"] = movie->getFrameIndex();
+    j["frame_count"] = movie->getFrameCount();
+    j["has_starting_savestate"] = movie->hasStartingSaveState();
+    if (!movie->getPath().empty()) {
+        j["path"] = movie->getPath().string();
+    }
+    return j;
+}
+
+nlohmann::json toolMovieStatus() { return mcpTextResult(buildMovieStatusJson()); }
+
+nlohmann::json toolMoviePlay(const nlohmann::json& args) {
+    auto* movie = g_emulator->m_movie.get();
+    if (args.contains("path")) {
+        if (!movie->load(args.at("path").get<std::string>())) {
+            throw std::runtime_error("failed to load movie file");
+        }
+    }
+    if (!movie->startPlaying()) {
+        throw std::runtime_error("failed to start movie playback");
+    }
+    nlohmann::json j = buildMovieStatusJson();
+    j["ok"] = true;
+    return mcpTextResult(j);
+}
+
+nlohmann::json toolMovieStop(const nlohmann::json& args) {
+    bool pauseAfter = !args.contains("pause") || args.at("pause").get<bool>();
+    g_emulator->m_movie->stop(pauseAfter);
+    nlohmann::json j = buildMovieStatusJson();
+    j["ok"] = true;
+    return mcpTextResult(j);
+}
+
+nlohmann::json toolMovieLoad(const nlohmann::json& args) {
+    if (!args.contains("path")) throw std::runtime_error("missing required argument 'path'");
+    if (!g_emulator->m_movie->load(args.at("path").get<std::string>())) {
+        throw std::runtime_error("failed to load movie file");
+    }
+    nlohmann::json j = buildMovieStatusJson();
+    j["ok"] = true;
+    return mcpTextResult(j);
+}
+
+nlohmann::json toolMovieGetInput(const nlohmann::json& args) {
+    if (!args.contains("frame")) throw std::runtime_error("missing required argument 'frame'");
+    const uint64_t frame = args.at("frame").get<uint64_t>();
+    const PCSX::MovieManager::Frame* input = g_emulator->m_movie->getFrameInput(frame);
+    if (!input) {
+        throw std::runtime_error("frame index out of range");
+    }
+    if (args.contains("port")) {
+        const int port = args.at("port").get<int>();
+        if (port == 1) return mcpTextResult(portInputToJson(input->port1));
+        if (port == 2) return mcpTextResult(portInputToJson(input->port2));
+        throw std::runtime_error("port must be 1 or 2");
+    }
+    nlohmann::json j;
+    j["frame"] = frame;
+    j["port1"] = portInputToJson(input->port1);
+    j["port2"] = portInputToJson(input->port2);
+    return mcpTextResult(j);
+}
+
+nlohmann::json buildPcContextJson(uint32_t address) {
+    auto* cpu = g_emulator->m_cpu.get();
+    nlohmann::json j;
+    j["address"] = address;
+    if (auto* exact = cpu->getSymbolAt(address)) {
+        j["exact_symbol"] = *exact;
+    }
+    if (auto* sym = cpu->findContainingSymbol(address)) {
+        j["symbol"] = sym->second;
+        j["symbol_address"] = sym->first;
+        j["offset"] = address - sym->first;
+    }
+    return j;
+}
+
+nlohmann::json toolGetPcContext(const nlohmann::json& args) {
+    uint32_t address = g_emulator->m_cpu->m_regs.pc;
+    if (args.contains("address")) {
+        address = parseAddress(args, "address");
+    }
+    return mcpTextResult(buildPcContextJson(address));
+}
+
+nlohmann::json toolResolveSymbol(const nlohmann::json& args) {
+    if (!args.contains("name")) throw std::runtime_error("missing required argument 'name'");
+    std::string name = args.at("name").get<std::string>();
+    bool exactOnly = args.contains("exact") && args.at("exact").get<bool>();
+    auto& symbols = g_emulator->m_cpu->m_symbols;
+    nlohmann::json matches = nlohmann::json::array();
+    for (const auto& [addr, symName] : symbols) {
+        if (symName == name) {
+            nlohmann::json m;
+            m["name"] = symName;
+            m["address"] = addr;
+            matches.push_back(m);
+        } else if (!exactOnly && symName.find(name) != std::string::npos) {
+            nlohmann::json m;
+            m["name"] = symName;
+            m["address"] = addr;
+            matches.push_back(m);
+        }
+    }
+    if (matches.empty()) {
+        throw std::runtime_error(fmt::format("no symbol match for '{}'", name));
+    }
+    nlohmann::json j;
+    j["query"] = name;
+    j["matches"] = matches;
+    return mcpTextResult(j);
+}
+
+nlohmann::json toolListSymbols(const nlohmann::json& args) {
+    size_t limit = 200;
+    if (args.contains("limit")) {
+        limit = args.at("limit").get<size_t>();
+    }
+    std::string prefix;
+    if (args.contains("prefix")) {
+        prefix = args.at("prefix").get<std::string>();
+    }
+    nlohmann::json symbols = nlohmann::json::array();
+    for (const auto& [addr, name] : g_emulator->m_cpu->m_symbols) {
+        if (!prefix.empty() && name.rfind(prefix, 0) != 0) continue;
+        symbols.push_back({{"name", name}, {"address", addr}});
+        if (symbols.size() >= limit) break;
+    }
+    nlohmann::json j;
+    j["count"] = symbols.size();
+    j["symbols"] = symbols;
+    return mcpTextResult(j);
+}
+
+nlohmann::json listResources() {
+    nlohmann::json resources = nlohmann::json::array();
+    resources.push_back({{"uri", "pcsx://status"},
+                         {"name", "emulation_status"},
+                         {"description", "Current emulator run state, PC, movie state, and nearest symbol."},
+                         {"mimeType", "application/json"}});
+    resources.push_back({{"uri", "pcsx://registers"},
+                         {"name", "cpu_registers"},
+                         {"description", "MIPS GPRs, PC, HI, and LO."},
+                         {"mimeType", "application/json"}});
+    resources.push_back({{"uriTemplate", "pcsx://memory/{address}"},
+                         {"name", "memory"},
+                         {"description",
+                          "Read emulated memory at a PSX virtual address. Optional query: ?size=N (default 4, max "
+                          "4096). Address is hex with or without 0x prefix."},
+                         {"mimeType", "application/json"}});
+    return resources;
+}
+
+nlohmann::json readResource(const std::string& uri) {
+    if (uri == "pcsx://status") {
+        return {{"contents", {{{"uri", uri}, {"mimeType", "application/json"}, {"text", buildEmulationStatusJson().dump(2)}}}}};
+    }
+    if (uri == "pcsx://registers") {
+        return {{"contents", {{{"uri", uri}, {"mimeType", "application/json"}, {"text", buildRegistersJson().dump(2)}}}}};
+    }
+    constexpr std::string_view kMemoryPrefix = "pcsx://memory/";
+    if (uri.rfind(kMemoryPrefix, 0) == 0) {
+        std::string rest = uri.substr(kMemoryPrefix.size());
+        size_t size = 4;
+        auto qpos = rest.find('?');
+        std::string addrPart = qpos == std::string::npos ? rest : rest.substr(0, qpos);
+        if (qpos != std::string::npos) {
+            std::string query = rest.substr(qpos + 1);
+            if (query.rfind("size=", 0) == 0) {
+                size = std::stoul(query.substr(5));
+            }
+        }
+        uint32_t address = std::stoul(addrPart, nullptr, 0);
+        std::string text = buildMemoryJson(address, size).dump(2);
+        return {{"contents", {{{"uri", uri}, {"mimeType", "application/json"}, {"text", text}}}}};
+    }
+    throw std::runtime_error(fmt::format("unknown resource uri '{}'", uri));
+}
+
 nlohmann::json listTools() {
     auto schema = [](const nlohmann::json& properties, const nlohmann::json& required = nlohmann::json::array()) {
         nlohmann::json s;
@@ -325,6 +569,37 @@ nlohmann::json listTools() {
                      {"inputSchema",
                       schema({{"id", {{"type", "string"}, {"description", "Breakpoint id from list_breakpoints"}}}},
                              nlohmann::json::array({"id"}))}});
+    tools.push_back({{"name", "movie_status"},
+                     {"description", "Get movie mode, frame index, frame count, and loaded path."},
+                     {"inputSchema", schema(nlohmann::json::object())}});
+    tools.push_back({{"name", "movie_play"},
+                     {"description", "Load optional path then start movie playback from embedded savestate."},
+                     {"inputSchema", schema({{"path", {{"type", "string"}, {"description", "Optional .pcsxmv path"}}}})}});
+    tools.push_back({{"name", "movie_stop"},
+                     {"description", "Stop movie recording/playback."},
+                     {"inputSchema", schema({{"pause", {{"type", "boolean"}, {"description", "Pause after stop (default true)"}}}})}});
+    tools.push_back({{"name", "movie_load"},
+                     {"description", "Load a .pcsxmv file without starting playback."},
+                     {"inputSchema", schema({{"path", {{"type", "string"}}}}, nlohmann::json::array({"path"}))}});
+    tools.push_back({{"name", "movie_get_input"},
+                     {"description", "Get recorded input for a movie frame."},
+                     {"inputSchema",
+                      schema({{"frame", {{"type", "integer"}}},
+                              {"port", {{"type", "integer"}, {"description", "Optional port 1 or 2"}}}},
+                             nlohmann::json::array({"frame"}))}});
+    tools.push_back({{"name", "get_pc_context"},
+                     {"description", "Resolve Ghidra/Redux symbol info for an address (default: current PC)."},
+                     {"inputSchema", schema({{"address", {{"type", "integer"}, {"description", "PSX virtual address"}}}})}});
+    tools.push_back({{"name", "resolve_symbol"},
+                     {"description", "Find symbol address(es) by name (Ghidra/Redux symbol table)."},
+                     {"inputSchema",
+                      schema({{"name", {{"type", "string"}}},
+                              {"exact", {{"type", "boolean"}, {"description", "Exact match only (default false)"}}}},
+                             nlohmann::json::array({"name"}))}});
+    tools.push_back({{"name", "list_symbols"},
+                     {"description", "List loaded symbols, optionally filtered by name prefix."},
+                     {"inputSchema",
+                      schema({{"prefix", {{"type", "string"}}}, {"limit", {{"type", "integer"}, {"maximum", 1000}}}})}});
     return tools;
 }
 
@@ -338,6 +613,14 @@ nlohmann::json callTool(const std::string& name, const nlohmann::json& args) {
     if (name == "list_breakpoints") return toolListBreakpoints();
     if (name == "add_breakpoint") return toolAddBreakpoint(args);
     if (name == "remove_breakpoint") return toolRemoveBreakpoint(args);
+    if (name == "movie_status") return toolMovieStatus();
+    if (name == "movie_play") return toolMoviePlay(args);
+    if (name == "movie_stop") return toolMovieStop(args);
+    if (name == "movie_load") return toolMovieLoad(args);
+    if (name == "movie_get_input") return toolMovieGetInput(args);
+    if (name == "get_pc_context") return toolGetPcContext(args);
+    if (name == "resolve_symbol") return toolResolveSymbol(args);
+    if (name == "list_symbols") return toolListSymbols(args);
     throw std::runtime_error(fmt::format("unknown tool '{}'", name));
 }
 
@@ -358,11 +641,17 @@ std::optional<nlohmann::json> handleMcpRequest(const nlohmann::json& req) {
         if (method == "initialize") {
             nlohmann::json result;
             result["protocolVersion"] = "2024-11-05";
-            result["capabilities"] = {{"tools", nlohmann::json::object()}};
+            result["capabilities"] = {{"tools", nlohmann::json::object()}, {"resources", nlohmann::json::object()}};
             result["serverInfo"] = {{"name", "pcsx-redux"}, {"version", "1.0.0"}};
             response["result"] = result;
         } else if (method == "tools/list") {
             response["result"] = {{"tools", listTools()}};
+        } else if (method == "resources/list") {
+            response["result"] = {{"resources", listResources()}};
+        } else if (method == "resources/read") {
+            const auto& params = req.at("params");
+            std::string uri = params.at("uri").get<std::string>();
+            response["result"] = readResource(uri);
         } else if (method == "tools/call") {
             const auto& params = req.at("params");
             std::string toolName = params.at("name").get<std::string>();
