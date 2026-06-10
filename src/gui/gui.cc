@@ -62,6 +62,7 @@ extern "C" {
 #include "core/sio1-server.h"
 #include "core/sio1.h"
 #include "core/sstate.h"
+#include "core/mcp-server.h"
 #include "core/web-server.h"
 #include "flags.h"
 #include "fmt/chrono.h"
@@ -2271,6 +2272,20 @@ query using a REST api. See the wiki for details.
 The debugger might be required in some cases.)"));
         changed |=
             ImGui::InputInt(_("Web Server Port"), &debugSettings.get<Emulator::DebugSettings::WebServerPort>().value);
+        if (ImGui::Checkbox(_("Enable MCP Server"), &debugSettings.get<Emulator::DebugSettings::McpServer>().value)) {
+            changed = true;
+            if (debugSettings.get<Emulator::DebugSettings::McpServer>()) {
+                g_emulator->m_mcpServer->startServer(g_system->getLoop(),
+                                                     debugSettings.get<Emulator::DebugSettings::McpServerPort>());
+            } else {
+                g_emulator->m_mcpServer->stopServer();
+            }
+        }
+        ImGuiHelpers::ShowHelpMarker(_(R"(Exposes a Model Context Protocol (MCP) HTTP
+endpoint for Cursor and other MCP clients at
+http://127.0.0.1:<port>/mcp (localhost only).)"));
+        changed |=
+            ImGui::InputInt(_("MCP Server Port"), &debugSettings.get<Emulator::DebugSettings::McpServerPort>().value);
         if (ImGui::Checkbox(_("Enable SIO1 Server"), &debugSettings.get<Emulator::DebugSettings::SIO1Server>().value)) {
             changed = true;
             if (debugSettings.get<Emulator::DebugSettings::SIO1Server>()) {

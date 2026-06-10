@@ -71,6 +71,7 @@ class CDRom;
 class Counters;
 class Debug;
 class GdbServer;
+class McpServer;
 class GPU;
 class GPULogger;
 class GTE;
@@ -123,6 +124,8 @@ class Emulator {
         typedef Setting<bool, TYPESTRING("GdbServerTrace"), false> GdbServerTrace;
         typedef Setting<bool, TYPESTRING("WebServer"), false> WebServer;
         typedef Setting<int, TYPESTRING("WebServerPort"), 8080> WebServerPort;
+        typedef Setting<bool, TYPESTRING("McpServer"), false> McpServer;
+        typedef Setting<int, TYPESTRING("McpServerPort"), 8090> McpServerPort;
         typedef Setting<uint32_t, TYPESTRING("KernelCallA0_00_1f"), 0xffffffff> KernelCallA0_00_1f;
         typedef Setting<uint32_t, TYPESTRING("KernelCallA0_20_3f"), 0xffffffff> KernelCallA0_20_3f;
         typedef Setting<uint32_t, TYPESTRING("KernelCallA0_40_5f"), 0xffffffff> KernelCallA0_40_5f;
@@ -147,7 +150,8 @@ class Emulator {
         };
         typedef Setting<SIO1Mode, TYPESTRING("SIO1Mode"), SIO1Mode::Protobuf> SIO1ModeSetting;
         typedef Settings<Debug, Trace, KernelLog, FirstChanceException, SkipISR, LoggingCDROM, GdbServer, GdbManifest,
-                         GdbLogSetting, GdbServerPort, GdbServerTrace, WebServer, WebServerPort, KernelCallA0_00_1f,
+                         GdbLogSetting, GdbServerPort, GdbServerTrace, WebServer, WebServerPort, McpServer,
+                         McpServerPort, KernelCallA0_00_1f,
                          KernelCallA0_20_3f, KernelCallA0_40_5f, KernelCallA0_60_7f, KernelCallA0_80_9f,
                          KernelCallA0_a0_bf, KernelCallB0_00_1f, KernelCallB0_20_3f, KernelCallB0_40_5f,
                          KernelCallC0_00_1f, DemangledSymbols, PCdrv, PCdrvBase, SIO1Server, SIO1ServerPort, SIO1Client, SIO1ClientHost,
@@ -279,6 +283,7 @@ class Emulator {
     std::unique_ptr<SIO1Client> m_sio1Client;
     std::unique_ptr<SPUInterface> m_spu;
     std::unique_ptr<WebServer> m_webServer;
+    std::unique_ptr<McpServer> m_mcpServer;
 
   private:
     PcsxConfig m_config;

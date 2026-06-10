@@ -39,6 +39,7 @@
 #include "core/sio.h"
 #include "core/sio1-server.h"
 #include "core/sio1.h"
+#include "core/mcp-server.h"
 #include "core/web-server.h"
 #include "gpu/soft/interface.h"
 #include "lua/extra.h"
@@ -78,7 +79,8 @@ PCSX::Emulator::Emulator()
       m_sio1Server(new PCSX::SIO1Server()),
       m_sio1Client(new PCSX::SIO1Client()),
       m_spu(new PCSX::SPU::impl()),
-      m_webServer(new PCSX::WebServer()) {
+      m_webServer(new PCSX::WebServer()),
+      m_mcpServer(new PCSX::McpServer()) {
     auto L = *m_lua;
     L.openlibs();
 }

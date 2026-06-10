@@ -19,63 +19,36 @@
 
 #pragma once
 
-#include <cstdint>
-#include <filesystem>
-#include <string>
-#include <vector>
+#include <uv.h>
 
-#include "core/pad.h"
-#include "core/system.h"
+#include "support/eventbus.h"
+#include "support/list.h"
 
 namespace PCSX {
 
-class Lua;
-
-class MovieManager {
+class McpServer {
   public:
-    enum class Mode { Idle, Recording, Playing };
-
-    struct Frame {
-        PadInputState port1;
-        PadInputState port2;
+    McpServer();
+    enum McpServerStatus {
+        SERVER_STOPPED,
+        SERVER_STOPPING,
+        SERVER_STARTED,
     };
+    McpServerStatus getServerStatus() { return m_serverStatus; }
 
-    MovieManager();
-    ~MovieManager() = default;
-
-    Mode getMode() const { return m_mode; }
-    uint64_t getFrameIndex() const { return m_frameIndex; }
-    uint64_t getFrameCount() const { return m_frames.size(); }
-    const std::filesystem::path& getPath() const { return m_path; }
-    bool hasStartingSaveState() const { return !m_savestate.empty(); }
-    const Frame* getFrameInput(uint64_t index) const;
-
-    bool startRecording();
-    void stop(bool pauseAfter = false);
-    bool startPlaying();
-    bool load(const std::filesystem::path& path);
-    bool save(const std::filesystem::path& path);
-    void frameAdvance();
-    void advanceFrames(unsigned count);
-    void runUntilVblank();
-    unsigned getPendingFrameAdvances() const { return m_pendingFrameAdvances; }
-
-    void setLua(Lua L);
+    void startServer(uv_loop_t* loop, int port = 8090);
+    void stopServer();
 
   private:
-    void onVsync();
-    void applyFrame(uint64_t index);
-    void captureAndAppendFrame();
-    void ensureDeterminismWarning();
-    bool loadStartingSaveState();
-
+    class McpClient;
+    static void onNewConnectionTrampoline(uv_stream_t* server, int status);
+    void onNewConnection(int status);
+    static void closeCB(uv_handle_t* handle);
+    McpServerStatus m_serverStatus = SERVER_STOPPED;
+    uv_tcp_t m_server;
+    uv_loop_t* m_loop = nullptr;
+    Intrusive::List<McpClient> m_clients;
     EventBus::Listener m_listener;
-    Mode m_mode = Mode::Idle;
-    std::vector<Frame> m_frames;
-    std::string m_savestate;
-    uint64_t m_frameIndex = 0;
-    std::filesystem::path m_path;
-    unsigned m_pendingFrameAdvances = 0;
 };
 
 }  // namespace PCSX

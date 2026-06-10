@@ -306,6 +306,16 @@ int pcsxMain(int argc, char **argv) {
             debugSettings.get<PCSX::Emulator::DebugSettings::WebServerPort>() = args.get<int>("webserver-port").value();
         }
 
+        if (args.get<bool>("mcp")) {
+            debugSettings.get<PCSX::Emulator::DebugSettings::McpServer>() = true;
+        }
+        if (args.get<bool>("no-mcp")) {
+            debugSettings.get<PCSX::Emulator::DebugSettings::McpServer>() = false;
+        }
+        if (args.get<int>("mcp-port")) {
+            debugSettings.get<PCSX::Emulator::DebugSettings::McpServerPort>() = args.get<int>("mcp-port").value();
+        }
+
         auto argPCdrvBase = args.get<std::string>("pcdrvbase");
         if (args.get<bool>("pcdrv")) {
             debugSettings.get<PCSX::Emulator::DebugSettings::PCdrv>() = true;

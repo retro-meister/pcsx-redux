@@ -98,9 +98,11 @@ void MovieManager::onVsync() {
         }
     }
 
-    if (m_runUntilVblank) {
-        m_runUntilVblank = false;
-        g_system->pause();
+    if (m_pendingFrameAdvances > 0) {
+        m_pendingFrameAdvances--;
+        if (m_pendingFrameAdvances == 0) {
+            g_system->pause();
+        }
     }
 }
 
@@ -118,7 +120,7 @@ bool MovieManager::startRecording() {
 
 void MovieManager::stop(bool pauseAfter) {
     m_mode = Mode::Idle;
-    m_runUntilVblank = false;
+    m_pendingFrameAdvances = 0;
     g_emulator->m_pads->clearInjection();
     if (pauseAfter) {
         g_system->pause();
@@ -196,14 +198,17 @@ bool MovieManager::save(const std::filesystem::path& path) {
     return true;
 }
 
-void MovieManager::frameAdvance() { runUntilVblank(); }
+void MovieManager::frameAdvance() { advanceFrames(1); }
 
-void MovieManager::runUntilVblank() {
+void MovieManager::advanceFrames(unsigned count) {
+    if (count == 0) return;
+    m_pendingFrameAdvances = count;
     if (!g_system->running()) {
-        m_runUntilVblank = true;
         g_system->resume();
     }
 }
+
+void MovieManager::runUntilVblank() { advanceFrames(1); }
 
 const MovieManager::Frame* MovieManager::getFrameInput(uint64_t index) const {
     if (index >= m_frames.size()) return nullptr;
