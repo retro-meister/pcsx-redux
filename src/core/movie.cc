@@ -201,6 +201,47 @@ void MovieManager::runUntilVblank() {
     }
 }
 
+const MovieManager::Frame* MovieManager::getFrameInput(uint64_t index) const {
+    if (index >= m_frames.size()) return nullptr;
+    return &m_frames[index];
+}
+
+namespace {
+
+struct PadButtonName {
+    const char* name;
+    unsigned bit;
+};
+
+constexpr PadButtonName s_padButtons[] = {
+    {"SELECT", 0},   {"START", 3},    {"UP", 4},        {"RIGHT", 5},   {"DOWN", 6},
+    {"LEFT", 7},     {"L2", 8},       {"R2", 9},        {"L1", 10},     {"R1", 11},
+    {"TRIANGLE", 12}, {"CIRCLE", 13}, {"CROSS", 14},    {"SQUARE", 15},
+};
+
+void pushPortInput(Lua& L, const PadInputState& port) {
+    L.newtable();
+    for (const auto& button : s_padButtons) {
+        L.push(button.name);
+        L.push(((port.buttonStatus & (1 << button.bit)) == 0));
+        L.settable();
+    }
+    L.push("leftX");
+    L.push(lua_Number(port.leftJoyX));
+    L.settable();
+    L.push("leftY");
+    L.push(lua_Number(port.leftJoyY));
+    L.settable();
+    L.push("rightX");
+    L.push(lua_Number(port.rightJoyX));
+    L.settable();
+    L.push("rightY");
+    L.push(lua_Number(port.rightJoyY));
+    L.settable();
+}
+
+}  // namespace
+
 void MovieManager::setLua(Lua L) {
     L.getfieldtable("PCSX", LUA_GLOBALSINDEX);
     L.push("Movie");
@@ -308,6 +349,45 @@ void MovieManager::setLua(Lua L) {
                     L.push("playing");
                     break;
             }
+            return 1;
+        },
+        -1);
+
+    L.declareFunc(
+        "getInput",
+        [](lua_State* L_) -> int {
+            Lua L(L_);
+            if (L.gettop() < 1 || !L.isnumber(1)) {
+                return L.error("Movie.getInput needs a frame index");
+            }
+            const uint64_t frame = L.checknumber(1);
+            const Frame* input = g_emulator->m_movie->getFrameInput(frame);
+            if (!input) {
+                L.push();
+                return 1;
+            }
+            if (L.gettop() >= 2 && !L.isnil(2)) {
+                if (!L.isnumber(2)) {
+                    return L.error("Movie.getInput port must be 1 or 2");
+                }
+                const int port = static_cast<int>(L.checknumber(2));
+                if (port == 1) {
+                    pushPortInput(L, input->port1);
+                    return 1;
+                }
+                if (port == 2) {
+                    pushPortInput(L, input->port2);
+                    return 1;
+                }
+                return L.error("Movie.getInput port must be 1 or 2");
+            }
+            L.newtable();
+            L.push("port1");
+            pushPortInput(L, input->port1);
+            L.settable();
+            L.push("port2");
+            pushPortInput(L, input->port2);
+            L.settable();
             return 1;
         },
         -1);

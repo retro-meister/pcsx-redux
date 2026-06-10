@@ -48,6 +48,7 @@ class MovieManager {
     uint64_t getFrameCount() const { return m_frames.size(); }
     const std::filesystem::path& getPath() const { return m_path; }
     bool hasStartingSaveState() const { return !m_savestate.empty(); }
+    const Frame* getFrameInput(uint64_t index) const;
 
     bool startRecording();
     void stop(bool pauseAfter = false);
