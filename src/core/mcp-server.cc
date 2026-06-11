@@ -29,6 +29,7 @@
 #include "core/pad.h"
 
 #include "core/debug.h"
+#include "core/memory-access-trace.h"
 #include "core/movie.h"
 #include "core/psxemulator.h"
 #include "core/psxmem.h"
@@ -465,6 +466,70 @@ nlohmann::json toolListSymbols(const nlohmann::json& args) {
     return mcpTextResult(j);
 }
 
+nlohmann::json toolStartMemoryAccessTrace(const nlohmann::json& args) {
+    if (!debuggerEnabled()) throw std::runtime_error("Enable the debugger in PCSX settings first");
+    uint32_t address = parseAddress(args, "address");
+    unsigned width = args.contains("width") ? args.at("width").get<unsigned>() : 4;
+    std::string mode = args.contains("mode") ? args.at("mode").get<std::string>() : "write";
+    std::string label = args.contains("label") ? args.at("label").get<std::string>() : "";
+    bool dedupeByPc = !args.contains("dedupe_by_pc") || args.at("dedupe_by_pc").get<bool>();
+    bool countHits = !args.contains("count_hits") || args.at("count_hits").get<bool>();
+    const auto accessMode = PCSX::MemoryAccessTrace::parseAccessMode(mode);
+    const std::string id =
+        g_emulator->m_memoryAccessTrace->start(address, width, accessMode, label, dedupeByPc, countHits);
+    nlohmann::json j = g_emulator->m_memoryAccessTrace->getTraceLog(id);
+    j["ok"] = true;
+    return mcpTextResult(j);
+}
+
+nlohmann::json toolListMemoryAccessTraces() {
+    if (!debuggerEnabled()) throw std::runtime_error("Enable the debugger in PCSX settings first");
+    return mcpTextResult(g_emulator->m_memoryAccessTrace->listTraces());
+}
+
+nlohmann::json toolGetMemoryAccessTrace(const nlohmann::json& args) {
+    if (!debuggerEnabled()) throw std::runtime_error("Enable the debugger in PCSX settings first");
+    std::string idOrLabel;
+    if (args.contains("id")) {
+        idOrLabel = args.at("id").get<std::string>();
+    } else if (args.contains("label")) {
+        idOrLabel = args.at("label").get<std::string>();
+    }
+    return mcpTextResult(g_emulator->m_memoryAccessTrace->getTraceLog(idOrLabel));
+}
+
+nlohmann::json toolClearMemoryAccessTrace(const nlohmann::json& args) {
+    if (!debuggerEnabled()) throw std::runtime_error("Enable the debugger in PCSX settings first");
+    if (!args.contains("id") && !args.contains("label")) {
+        throw std::runtime_error("missing required argument 'id' or 'label'");
+    }
+    const std::string idOrLabel =
+        args.contains("id") ? args.at("id").get<std::string>() : args.at("label").get<std::string>();
+    if (!g_emulator->m_memoryAccessTrace->clearTraceLog(idOrLabel)) {
+        throw std::runtime_error(fmt::format("memory access trace not found: {}", idOrLabel));
+    }
+    nlohmann::json j;
+    j["ok"] = true;
+    j["cleared"] = idOrLabel;
+    return mcpTextResult(j);
+}
+
+nlohmann::json toolStopMemoryAccessTrace(const nlohmann::json& args) {
+    if (!debuggerEnabled()) throw std::runtime_error("Enable the debugger in PCSX settings first");
+    if (!args.contains("id") && !args.contains("label")) {
+        throw std::runtime_error("missing required argument 'id' or 'label'");
+    }
+    const std::string idOrLabel =
+        args.contains("id") ? args.at("id").get<std::string>() : args.at("label").get<std::string>();
+    if (!g_emulator->m_memoryAccessTrace->stopTrace(idOrLabel)) {
+        throw std::runtime_error(fmt::format("memory access trace not found: {}", idOrLabel));
+    }
+    nlohmann::json j;
+    j["ok"] = true;
+    j["stopped"] = idOrLabel;
+    return mcpTextResult(j);
+}
+
 nlohmann::json listResources() {
     nlohmann::json resources = nlohmann::json::array();
     resources.push_back({{"uri", "pcsx://status"},
@@ -600,6 +665,43 @@ nlohmann::json listTools() {
                      {"description", "List loaded symbols, optionally filtered by name prefix."},
                      {"inputSchema",
                       schema({{"prefix", {{"type", "string"}}}, {"limit", {{"type", "integer"}, {"maximum", 1000}}}})}});
+    tools.push_back({{"name", "start_memory_access_trace"},
+                     {"description",
+                      "Arm a non-pausing read/write memory access trace (like Typed Debugger log mode). Requires "
+                      "debugger enabled (interpreter)."},
+                     {"inputSchema",
+                      schema({{"address", {{"type", "integer"}}},
+                              {"width", {{"type", "integer"}, {"description", "Watch width in bytes (default 4)"}}},
+                              {"mode",
+                               {{"type", "string"},
+                                {"enum", nlohmann::json::array({"read", "write", "both"})},
+                                {"description", "Access type to log (default write)"}}},
+                              {"label", {{"type", "string"}, {"description", "Optional stable name; replaces same label"}}},
+                              {"dedupe_by_pc",
+                               {{"type", "boolean"}, {"description", "Log each store PC once (default true)"}}},
+                              {"count_hits",
+                               {{"type", "boolean"},
+                                {"description", "Increment hit count for duplicate PCs (default true)"}}}},
+                             nlohmann::json::array({"address"}))}});
+    tools.push_back({{"name", "list_memory_access_traces"},
+                     {"description", "List active memory access traces without log entries."},
+                     {"inputSchema", schema(nlohmann::json::object())}});
+    tools.push_back(
+        {{"name", "get_memory_access_trace"},
+         {"description", "Get trace metadata and logged access entries. Omit id/label to return all traces."},
+         {"inputSchema",
+          schema({{"id", {{"type", "string"}, {"description", "Trace id from start_memory_access_trace"}}},
+                  {"label", {{"type", "string"}, {"description", "Trace label if set"}}}})}});
+    tools.push_back({{"name", "clear_memory_access_trace"},
+                     {"description", "Clear logged entries for a trace but keep it armed."},
+                     {"inputSchema",
+                      schema({{"id", {{"type", "string"}}}, {"label", {{"type", "string"}}}},
+                             nlohmann::json::array())}});
+    tools.push_back({{"name", "stop_memory_access_trace"},
+                     {"description", "Remove a trace and its watch breakpoints."},
+                     {"inputSchema",
+                      schema({{"id", {{"type", "string"}}}, {"label", {{"type", "string"}}}},
+                             nlohmann::json::array())}});
     return tools;
 }
 
@@ -621,6 +723,11 @@ nlohmann::json callTool(const std::string& name, const nlohmann::json& args) {
     if (name == "get_pc_context") return toolGetPcContext(args);
     if (name == "resolve_symbol") return toolResolveSymbol(args);
     if (name == "list_symbols") return toolListSymbols(args);
+    if (name == "start_memory_access_trace") return toolStartMemoryAccessTrace(args);
+    if (name == "list_memory_access_traces") return toolListMemoryAccessTraces();
+    if (name == "get_memory_access_trace") return toolGetMemoryAccessTrace(args);
+    if (name == "clear_memory_access_trace") return toolClearMemoryAccessTrace(args);
+    if (name == "stop_memory_access_trace") return toolStopMemoryAccessTrace(args);
     throw std::runtime_error(fmt::format("unknown tool '{}'", name));
 }
 

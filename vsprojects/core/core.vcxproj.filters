@@ -151,6 +151,9 @@
     <ClCompile Include="..\..\src\core\gte-transfer.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\core\memory-access-trace.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\core\ramlogger.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -310,6 +313,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\core\gte-internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\memory-access-trace.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\core\ramlogger.h">
