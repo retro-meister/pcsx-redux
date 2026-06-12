@@ -135,3 +135,6 @@ luacov.stats.out
 /AppDir
 /*.AppImage
 /*.AppImage.zsync
+
+gulp_sweep*.csv
+.gulp_rng_loop.lua
