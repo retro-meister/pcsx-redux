@@ -137,4 +137,5 @@ luacov.stats.out
 /*.AppImage.zsync
 
 gulp_sweep*.csv
+gulp_trajectories*.csv
 .gulp_rng_loop.lua
